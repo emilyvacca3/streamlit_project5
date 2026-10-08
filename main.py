@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import plotly.express as px
 
 
 st.set_page_config(
@@ -196,6 +197,43 @@ if uploaded_file is not None:
         )
 
         st.bar_chart(end_locations)
+
+    st.divider()
+
+    st.subheader("Gantt chart")
+
+    chart_df = optimized_df.copy()
+    chart_df["Start"] = pd.to_datetime("2026-01-01 " + chart_df["start time"].astype(str), errors="coerce")
+    chart_df["Finish"] = pd.to_datetime("2026-01-01 " + chart_df["end time"].astype(str), errors="coerce")
+    valid_chart_df = chart_df.dropna(subset=["Start", "Finish"]).copy()
+    valid_chart_df = valid_chart_df[valid_chart_df["Finish"] >= valid_chart_df["Start"]]
+
+    if valid_chart_df.empty:
+        st.warning("A Gantt chart cannot be shown because the start or end times could not be read.")
+    else:
+        valid_chart_df["Trip"] = (
+            valid_chart_df["bus"].astype(str) + " – "
+            + valid_chart_df["activity"].astype(str) + " – "
+            + valid_chart_df["start location"].astype(str) + " to "
+            + valid_chart_df["end location"].astype(str)
+        )
+        fig = px.timeline(
+            valid_chart_df,
+            x_start="Start",
+            x_end="Finish",
+            y="Trip",
+            color="bus",
+            hover_data=["bus", "activity", "start location", "start time", "end time", "end location"],
+            title="Bus schedule timeline"
+        )
+        fig.update_yaxes(autorange="reversed")
+        fig.update_layout(
+            xaxis_title="Time",
+            yaxis_title="Trip",
+            height=max(450, 35 * len(valid_chart_df) + 150),
+            legend_title="Bus"
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
     st.divider()
 
