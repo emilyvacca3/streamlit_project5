@@ -3,7 +3,7 @@ import pandas as pd
 
 
 st.set_page_config(
-    page_title="Bus Schedule Optimizer",
+    page_title="Bus Schedule Optimizer Prototype 1",
     page_icon="🚌",
     layout="wide"
 )
@@ -64,10 +64,10 @@ def optimize_schedule(df):
     return df.copy()
 
 
-st.title("Bus Schedule Optimizer")
+st.title("Bus Schedule Optimizer Prototype 1")
 
 st.write(
-    "Upload a bus schedule to check, clean and improve the data."
+    "Upload a bus schedule to check, clean and improve the data. Left column includes the two other prototypes appropriately named prototype 2 and 3." 
 )
 
 st.divider()
