@@ -1,10 +1,9 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
 
 
 st.set_page_config(
-    page_title="Bus Schedule Optimizer Prototype 1",
+    page_title="Bus Schedule Optimizer",
     page_icon="🚌",
     layout="wide"
 )
@@ -27,6 +26,16 @@ def load_data(file):
     return pd.read_csv(file)
 
 
+def check_data(df):
+    missing = []
+
+    for column in required_columns:
+        if column not in df.columns:
+            missing.append(column)
+
+    return missing
+
+
 def clean_data(df):
     changes = []
 
@@ -34,6 +43,7 @@ def clean_data(df):
 
     if duplicates > 0:
         df = df.drop_duplicates()
+
         changes.append(
             f"Removed {duplicates} duplicate rows"
         )
@@ -42,6 +52,7 @@ def clean_data(df):
 
     if empty_rows > 0:
         df = df.dropna(how="all")
+
         changes.append(
             f"Removed {empty_rows} empty rows"
         )
@@ -50,201 +61,370 @@ def clean_data(df):
 
     if missing_values > 0:
         df = df.ffill()
+
         changes.append(
             f"Filled {missing_values} missing values"
         )
 
     if not changes:
-        changes.append("No cleaning was necessary")
+        changes.append(
+            "No cleaning was necessary"
+        )
 
     return df.reset_index(drop=True), changes
 
 
 def optimize_schedule(df):
-    # The actual optimization model can be added here.
+    # Add the actual optimization model here.
     return df.copy()
 
 
-st.title("Bus Schedule Optimizer Prototype 1")
+st.title("Bus Schedule Optimizer")
 
 st.write(
-    "Upload a bus schedule to check, clean and improve the data. Left column includes the two other prototypes appropriately named prototype 2 and 3." 
+    "Upload a schedule and go through the different "
+    "steps to create an improved timetable."
 )
 
 st.divider()
 
 
-uploaded_file = st.file_uploader(
-    "Upload an Excel or CSV file",
-    type=["xlsx", "csv"]
+step = st.radio(
+    "Step",
+    [
+        "Upload",
+        "Check",
+        "Clean",
+        "Optimize",
+        "Results",
+        "Comparison"
+    ],
+    horizontal=True
 )
 
 
-if uploaded_file is not None:
+# ---------------------------------------------------------
+# UPLOAD
+# ---------------------------------------------------------
 
-    df = load_data(uploaded_file)
+if step == "Upload":
 
-    missing_columns = [
-        column
-        for column in required_columns
-        if column not in df.columns
-    ]
+    st.header("1. Upload")
 
-    if missing_columns:
+    upload_mode = st.radio(
+        "Choose an upload option",
+        [
+            "Completed schedule",
+            "Distance matrix + time table"
+        ],
+        horizontal=True,
+        key="upload_mode"
+    )
 
-        st.error("The following required columns are missing:")
+    if upload_mode == "Completed schedule":
 
-        for column in missing_columns:
-            st.write(f"- {column}")
+        st.session_state.pop("distance_matrix_file", None)
+        st.session_state.pop("time_table_file", None)
+
+        st.write(
+            "Upload a single Excel or CSV file containing the "
+            "completed bus schedule."
+        )
+
+        uploaded_file = st.file_uploader(
+            "Choose a completed schedule",
+            type=["xlsx", "csv"],
+            key="uploaded_schedule_file"
+        )
+
+        if uploaded_file is not None:
+            st.session_state["uploaded_file"] = uploaded_file
+
+            df = load_data(uploaded_file)
+
+            st.success("Schedule uploaded successfully.")
+
+            st.write("Preview")
+
+            st.dataframe(
+                df.head(20),
+                use_container_width=True
+            )
+
+    else:
+
+        st.session_state.pop("uploaded_file", None)
+
+        st.write(
+            "Upload both files needed to build the schedule: "
+            "the distance matrix and the time table."
+        )
+
+        distance_matrix_file = st.file_uploader(
+            "Upload distance matrix",
+            type=["xlsx", "csv"],
+            key="distance_matrix_file"
+        )
+
+        time_table_file = st.file_uploader(
+            "Upload time table",
+            type=["xlsx", "csv"],
+            key="time_table_file"
+        )
+
+        if distance_matrix_file is not None and time_table_file is not None:
+            st.session_state["distance_matrix_file"] = distance_matrix_file
+            st.session_state["time_table_file"] = time_table_file
+
+            st.success("Both files uploaded successfully.")
+
+            st.write("Distance matrix preview")
+            st.dataframe(
+                load_data(distance_matrix_file).head(20),
+                use_container_width=True
+            )
+
+            st.write("Time table preview")
+            st.dataframe(
+                load_data(time_table_file).head(20),
+                use_container_width=True
+            )
+
+        elif distance_matrix_file is not None or time_table_file is not None:
+            st.info("Please upload both files to continue.")
+
+    st.write("\n")
+    starting_energy = st.slider(
+        "Percentage of battery to start the buses",
+        0,
+        100,
+        25
+    )
+    st.write(f"Input the starting energy for the buses: {starting_energy}%")
+
+
+# ---------------------------------------------------------
+# CHECK
+# ---------------------------------------------------------
+
+elif step == "Check":
+
+    st.header("2. Check the data")
+
+    if "uploaded_file" not in st.session_state:
+
+        st.warning(
+            "Please upload a file first."
+        )
 
         st.stop()
 
-    st.success("File uploaded successfully.")
+    df = load_data(
+        st.session_state["uploaded_file"]
+    )
+
+    missing = check_data(df)
+
+    if missing:
+
+        st.error(
+            "The following columns are missing:"
+        )
+
+        for column in missing:
+            st.write(f"- {column}")
+
+    else:
+
+        st.success(
+            "All required columns are present."
+        )
+
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            st.metric(
+                "Rows",
+                len(df)
+            )
+
+        with col2:
+            st.metric(
+                "Buses",
+                df["bus"].nunique()
+            )
+
+        with col3:
+            st.metric(
+                "Start locations",
+                df["start location"].nunique()
+            )
+
+        with col4:
+            st.metric(
+                "End locations",
+                df["end location"].nunique()
+            )
+
+        st.dataframe(
+            df.head(20),
+            use_container_width=True
+        )
+
+
+# ---------------------------------------------------------
+# CLEAN
+# ---------------------------------------------------------
+
+elif step == "Clean":
+
+    st.header("3. Clean the data")
+
+    if "uploaded_file" not in st.session_state:
+
+        st.warning(
+            "Please upload a file first."
+        )
+
+        st.stop()
+
+    df = load_data(
+        st.session_state["uploaded_file"]
+    )
 
     cleaned_df, changes = clean_data(df)
 
-    optimized_df = optimize_schedule(cleaned_df)
+    st.subheader("Changes")
 
-    st.divider()
+    for change in changes:
+        st.success("✓ " + change)
 
-    st.subheader("Schedule overview")
+    st.subheader("Cleaned schedule")
+
+    st.dataframe(
+        cleaned_df,
+        use_container_width=True
+    )
+
+    st.session_state["cleaned_df"] = cleaned_df
+
+
+# ---------------------------------------------------------
+# OPTIMIZE
+# ---------------------------------------------------------
+
+elif step == "Optimize":
+
+    st.header("4. Optimize the schedule")
+
+    if "cleaned_df" not in st.session_state:
+
+        st.warning(
+            "Please complete the cleaning step first."
+        )
+
+        st.stop()
+
+    st.write(
+        "The cleaned schedule can now be passed to "
+        "the optimization model."
+    )
+
+    if st.button(
+        "Run optimization",
+        type="primary"
+    ):
+
+        optimized_df = optimize_schedule(
+            st.session_state["cleaned_df"]
+        )
+
+        st.session_state["optimized_df"] = optimized_df
+
+        st.success(
+            "Optimization finished."
+        )
+
+        st.dataframe(
+            optimized_df,
+            use_container_width=True
+        )
+
+
+# ---------------------------------------------------------
+# RESULTS
+# ---------------------------------------------------------
+
+elif step == "Results":
+
+    st.header("5. Results")
+
+    if "optimized_df" not in st.session_state:
+
+        st.warning(
+            "Please run the optimization first."
+        )
+
+        st.stop()
+
+    df = st.session_state["optimized_df"]
 
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
         st.metric(
             "Trips",
-            len(optimized_df)
+            len(df)
         )
 
     with col2:
         st.metric(
             "Buses",
-            optimized_df["bus"].nunique()
+            df["bus"].nunique()
         )
 
     with col3:
         st.metric(
             "Start locations",
-            optimized_df["start location"].nunique()
+            df["start location"].nunique()
         )
 
     with col4:
         st.metric(
             "End locations",
-            optimized_df["end location"].nunique()
+            df["end location"].nunique()
         )
 
     st.divider()
+
+    st.subheader("Activities")
+
+    activity_counts = (
+        df["activity"]
+        .value_counts()
+    )
+
+    st.bar_chart(activity_counts)
+
+    st.subheader("Trips per bus")
+
+    bus_counts = (
+        df["bus"]
+        .value_counts()
+        .sort_index()
+    )
+
+    st.bar_chart(bus_counts)
 
     st.subheader("Optimized schedule")
 
     st.dataframe(
-        optimized_df,
+        df,
         use_container_width=True,
-        height=400
+        height=450
     )
 
-    st.divider()
-
-    st.subheader("Schedule analysis")
-
-    left, right = st.columns(2)
-
-    with left:
-
-        st.write("Activities")
-
-        activity_counts = (
-            optimized_df["activity"]
-            .value_counts()
-        )
-
-        st.bar_chart(activity_counts)
-
-    with right:
-
-        st.write("Trips per bus")
-
-        bus_counts = (
-            optimized_df["bus"]
-            .value_counts()
-            .sort_index()
-        )
-
-        st.bar_chart(bus_counts)
-
-    left, right = st.columns(2)
-
-    with left:
-
-        st.write("Starting locations")
-
-        start_locations = (
-            optimized_df["start location"]
-            .value_counts()
-        )
-
-        st.bar_chart(start_locations)
-
-    with right:
-
-        st.write("Ending locations")
-
-        end_locations = (
-            optimized_df["end location"]
-            .value_counts()
-        )
-
-        st.bar_chart(end_locations)
-
-    st.divider()
-
-    st.subheader("Gantt chart")
-
-    chart_df = optimized_df.copy()
-    chart_df["Start"] = pd.to_datetime("2026-01-01 " + chart_df["start time"].astype(str), errors="coerce")
-    chart_df["Finish"] = pd.to_datetime("2026-01-01 " + chart_df["end time"].astype(str), errors="coerce")
-    valid_chart_df = chart_df.dropna(subset=["Start", "Finish"]).copy()
-    valid_chart_df = valid_chart_df[valid_chart_df["Finish"] >= valid_chart_df["Start"]]
-
-    if valid_chart_df.empty:
-        st.warning("A Gantt chart cannot be shown because the start or end times could not be read.")
-    else:
-        valid_chart_df["Trip"] = (
-            valid_chart_df["bus"].astype(str) + " – "
-            + valid_chart_df["activity"].astype(str) + " – "
-            + valid_chart_df["start location"].astype(str) + " to "
-            + valid_chart_df["end location"].astype(str)
-        )
-        fig = px.timeline(
-            valid_chart_df,
-            x_start="Start",
-            x_end="Finish",
-            y="Trip",
-            color="bus",
-            hover_data=["bus", "activity", "start location", "start time", "end time", "end location"],
-            title="Bus schedule timeline"
-        )
-        fig.update_yaxes(autorange="reversed")
-        fig.update_layout(
-            xaxis_title="Time",
-            yaxis_title="Trip",
-            height=max(450, 35 * len(valid_chart_df) + 150),
-            legend_title="Bus"
-        )
-        st.plotly_chart(fig, use_container_width=True)
-
-    st.divider()
-
-    st.subheader("Data cleaning")
-
-    for change in changes:
-        st.write("✓", change)
-
-    st.divider()
-
-    csv_file = optimized_df.to_csv(index=False)
+    csv_file = df.to_csv(index=False)
 
     st.download_button(
         "Download optimized schedule",
@@ -252,3 +432,55 @@ if uploaded_file is not None:
         file_name="optimized_schedule.csv",
         mime="text/csv"
     )
+
+
+# ---------------------------------------------------------
+# COMPARISON
+# ---------------------------------------------------------
+
+elif step == "Comparison":
+
+    st.header("6. Compare before and after")
+
+    if "cleaned_df" not in st.session_state:
+
+        st.warning(
+            "Please complete the cleaning step first."
+        )
+
+        st.stop()
+
+    if "optimized_df" not in st.session_state:
+
+        st.warning(
+            "Please run the optimization first."
+        )
+
+        st.stop()
+
+    before_df = st.session_state["cleaned_df"].copy()
+    after_df = st.session_state["optimized_df"].copy()
+
+    st.write(
+        "Side-by-side view of the schedule before and after "
+        "the optimization step."
+    )
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.subheader("Before optimization")
+        st.dataframe(
+            before_df,
+            use_container_width=True,
+            height=500
+        )
+
+    with col2:
+        st.subheader("After optimization")
+        st.dataframe(
+            after_df,
+            use_container_width=True,
+            height=500
+        )
+
